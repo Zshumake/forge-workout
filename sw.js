@@ -1,5 +1,5 @@
 /* FORGE service worker — cache-first app shell for instant offline launch. */
-const VERSION = "0.6.0";
+const VERSION = "0.7.0";
 const CACHE = `forge-${VERSION}`;
 const SHELL = [
   "./",

@@ -112,7 +112,8 @@ button:focus-visible,input:focus-visible,label:focus-visible,[tabindex]:focus-vi
 .cue{color:var(--ink-1);font-size:17px;margin-top:8px}
 .mistake{color:var(--ink-2);font-size:14px;margin-top:6px}
 .target{font-family:var(--ff-d);font-weight:800;font-variant-numeric:tabular-nums;font-size:15px;color:var(--ink-1);margin-top:12px}
-.demo{height:120px;border-radius:16px;background:radial-gradient(120% 120% at 50% 0%,#1b1f26,#0d0f13);display:flex;align-items:center;justify-content:center;margin-top:14px;color:var(--ink-2);font-size:13px;position:relative;overflow:hidden}
+.demo{width:100%;height:120px;border-radius:16px;background:radial-gradient(120% 120% at 50% 0%,var(--bg-3),var(--bg-1));display:flex;align-items:center;justify-content:center;margin-top:14px;color:var(--ink-2);font-size:13px;position:relative;overflow:hidden}
+.demo-cta{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:12px;font-weight:700;color:var(--ember)}
 .demo svg{width:96px;height:96px;opacity:.92}
 .sets{margin-top:16px}
 .setrow{display:flex;align-items:center;gap:10px;padding:10px;border-radius:14px;background:var(--bg-2);margin-bottom:10px;transition:background .2s}
@@ -187,7 +188,7 @@ input[type=text]{width:100%;background:var(--bg-3);border:0;border-radius:12px;c
 /* ===================================================================================
    FORGE — single-file offline workout PWA.  Layers: Content · Store · Engine · Game · Timer · UI
    =================================================================================== */
-const VERSION = "0.6.0";
+const VERSION = "0.7.0";
 const $ = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -301,7 +302,7 @@ const BELTS=[[1,"Novice"],[5,"Bronze"],[10,"Silver"],[15,"Gold"],[20,"Iron"],[30
 const KEY="forge.state.v1";
 function freshState(){return{
   schemaVersion:1, createdAt:Date.now(),
-  profile:{name:"", dumbbellMax:50, bandCount:3, experience:"returning", weeklyGoal:3, onboarded:false, why:"", theme:"aurora"},
+  profile:{name:"", dumbbellMax:50, bandCount:3, dumbbellIncrement:5, experience:"returning", weeklyGoal:3, onboarded:false, why:"", theme:"aurora"},
   exState:{},                 // exerciseId -> {load,bandIdx,targetReps,rr,sets,streak,fallback,rom,intensity,stale}
   overrides:{},               // base exerciseId -> chosen variant id (plateau swaps)
   rotationIndex:0,
@@ -342,14 +343,16 @@ function removeProfile(id){if(APP.order.length<=1)return; delete APP.profiles[id
 function localDate(ms=Date.now()){const d=new Date(ms);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
 function mondayOf(ms){const d=new Date(ms);d.setHours(0,0,0,0);const off=(d.getDay()+6)%7;d.setDate(d.getDate()-off);return d;}
 function weekKey(ms=Date.now()){const m=mondayOf(ms);return localDate(m.getTime());}
-function dumbbellStops(){const out=[];for(let w=5;w<=S.profile.dumbbellMax;w+=5)out.push(w);return out;}
+function dbInc(){return S.profile.dumbbellIncrement||5;}
+function dumbbellStops(){const inc=dbInc(),out=[];for(let w=inc;w<=S.profile.dumbbellMax+0.001;w+=inc)out.push(Math.round(w*10)/10);return out;}
+function snapWeight(w){const inc=dbInc(); let v=Math.round((w||inc)/inc)*inc; return Math.max(inc, Math.min(S.profile.dumbbellMax, Math.round(v*10)/10));}
 function bandLevels(){const labels=["Light","Medium","Heavy","X-Heavy","Max"];return labels.slice(0,Math.max(2,S.profile.bandCount)).map((l,i)=>({i,label:l}));}
 function est1RM(w,r){return Math.round(w*(1+r/30));}
 
 /* -------------------------------------- ENGINE (progression + Feel) -------------------------------------- */
 function seedEx(item){
   const def=EX[item.ex];
-  return {load:def.eq==="db"?def.seed:null, bandIdx:def.eq==="band"?0:null,
+  return {load:def.eq==="db"?snapWeight(def.seed):null, bandIdx:def.eq==="band"?0:null,
           targetReps:item.rr[0], rr:item.rr.slice(), sets:item.sets, streak:0, fallback:"load", rom:0, intensity:0, stale:0};
 }
 function getExState(item){ if(!S.exState[item.ex]) S.exState[item.ex]=seedEx(item); const st=S.exState[item.ex]; st.rr=item.rr.slice(); st.targetReps=clamp(st.targetReps||st.rr[0], st.rr[0], st.rr[1]); return st; }
@@ -395,7 +398,7 @@ function progressExercise(entry){
   const feel=entry.feel||"Right";
   if(feel==="Hard"||missBottom){ // back off gently
     st.streak=0;
-    if(def.eq==="db"){ if(missBottom&&feel==="Hard") st.load=Math.max(5,st.load-5); }
+    if(def.eq==="db"){ if(missBottom&&feel==="Hard") st.load=Math.max(dbInc(),st.load-dbInc()); }
     else { if(st.rom>0)st.rom--; else if(st.bandIdx>0&&missBottom)st.bandIdx--; }
     st.targetReps=st.rr[0];
   } else {
@@ -403,7 +406,7 @@ function progressExercise(entry){
     const stepNow = st.streak>=2 || (hitTop&&feel==="Easy");
     if(stepNow){
       if(def.eq==="db"){
-        const nw=st.load+5;
+        const nw=st.load+dbInc();
         if(nw>S.profile.dumbbellMax){            // maxed dumbbells -> climb the Intensity ladder, not more iron
           st.fallback="intensity";
           if(st.intensity<INTENSITY.length) st.intensity++;
@@ -429,7 +432,7 @@ function applyLayoff(){
   if(days<10) return 0;
   const pct=Math.min(0.30, 0.10 + 0.10*Math.floor(days/14));   // ~10% base, +10% per 2 wks, cap 30%
   for(const id in S.exState){ const st=S.exState[id], def=EX[id]; if(!def) continue; st.streak=0;
-    if(def.eq==="db"&&st.load) st.load=Math.max(5, Math.round(st.load*(1-pct)/5)*5);
+    if(def.eq==="db"&&st.load){ const inc=dbInc(); st.load=Math.max(inc, Math.round(st.load*(1-pct)/inc)*inc); }
     else if(def.eq==="band"){ if(st.rom>0)st.rom=0; else if(st.bandIdx>0)st.bandIdx=Math.max(0,st.bandIdx-1); }
     if(st.rr) st.targetReps=st.rr[0];
   }
@@ -585,6 +588,7 @@ const ICONS={
   plus:'<path d="M12 5v14M5 12h14"/>',
   user:'<circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>',
   swap:'<path d="M7 4L3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
+  play:'<path d="M7 5l12 7-12 7z"/>',
 };
 function icon(name,opts){opts=opts||{};const c=ICONS[name]||"";return `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${opts.size?` style="width:${opts.size}px;height:${opts.size}px"`:""}>${c}</svg>`;}
 
@@ -641,7 +645,7 @@ function render(){
 }
 
 /* ---- Onboarding ---- */
-let ob={dumbbellMax:50,bandCount:3,name:"",why:""};
+let ob={dumbbellMax:50,bandCount:3,increment:5,name:"",why:""};
 let todayOpts={time:"full",place:"home",energy:"good"};
 let homeExpand=false;
 function renderOnboard(){
@@ -656,6 +660,8 @@ function renderOnboard(){
        <input type="text" id="ob-why" placeholder="e.g. keep up with my kids" value="${ob.why}"></div>
      <div><div class="eyebrow">Heaviest your dumbbells go (per hand)</div>
        <div class="opt" id="ob-db">${[25,50,75,90].map(w=>`<button data-w="${w}" class="${ob.dumbbellMax===w?'sel':''}">${w} lb</button>`).join("")}</div></div>
+     <div><div class="eyebrow">Smallest jump between weights</div>
+       <div class="opt" id="ob-inc">${[2.5,5,10].map(n=>`<button data-i="${n}" class="${ob.increment===n?'sel':''}">${n} lb</button>`).join("")}</div></div>
      <div><div class="eyebrow">How many resistance band levels do you have?</div>
        <div class="opt" id="ob-band">${[2,3,4,5].map(n=>`<button data-n="${n}" class="${ob.bandCount===n?'sel':''}">${n}</button>`).join("")}</div></div>
    </div>
@@ -664,8 +670,9 @@ function renderOnboard(){
   $("#ob-name").oninput=e=>ob.name=e.target.value;
   $("#ob-why").oninput=e=>ob.why=e.target.value;
   $$("#ob-db button").forEach(b=>b.onclick=()=>{ob.dumbbellMax=+b.dataset.w;renderOnboard();});
+  $$("#ob-inc button").forEach(b=>b.onclick=()=>{ob.increment=+b.dataset.i;renderOnboard();});
   $$("#ob-band button").forEach(b=>b.onclick=()=>{ob.bandCount=+b.dataset.n;renderOnboard();});
-  $("#ob-go").onclick=()=>{ unlockAudio(); S.profile.name=ob.name.trim(); S.profile.why=ob.why.trim(); S.profile.dumbbellMax=ob.dumbbellMax; S.profile.bandCount=ob.bandCount; S.profile.onboarded=true; if(navigator.storage&&navigator.storage.persist)navigator.storage.persist(); applyTheme(S.profile.theme); rollWeek(); save(); ob={dumbbellMax:50,bandCount:3,name:"",why:""}; view("home"); };
+  $("#ob-go").onclick=()=>{ unlockAudio(); S.profile.name=ob.name.trim(); S.profile.why=ob.why.trim(); S.profile.dumbbellMax=ob.dumbbellMax; S.profile.dumbbellIncrement=ob.increment; S.profile.bandCount=ob.bandCount; S.profile.onboarded=true; if(navigator.storage&&navigator.storage.persist)navigator.storage.persist(); applyTheme(S.profile.theme); rollWeek(); save(); ob={dumbbellMax:50,bandCount:3,increment:5,name:"",why:""}; view("home"); };
 }
 
 /* ---- Home ---- */
@@ -806,7 +813,7 @@ function renderRunner(){
      <h2 class="exname">${e.name}</h2>
      <div class="cue">${e.cue}</div>
      <div class="mistake">Avoid: ${e.miss}</div>
-     <div class="demo">${exGlyph(def.eq)}</div>
+     <button class="demo" id="howto" aria-label="How to do ${e.name}">${exGlyph(def.eq)}<span class="demo-cta">${icon('play')} How to do it</span></button>
      <div class="target">Target ${e.sets.length} × ${e.rr[0]}–${e.rr[1]} reps${lastPerf?` · last: ${lastPerf}`:""}</div>
      ${e.tech?`<div class="card" style="border-left:3px solid var(--ember);margin-top:12px;padding:12px 14px"><b>${e.tech.tag}</b> <span class="muted">${e.tech.tip}</span></div>`:''}
      ${baseStall?`<button class="btn btn-ghost btn-block" id="swap" style="margin-top:10px;min-height:44px">This lift's been stuck — try a variation</button>`:''}
@@ -838,6 +845,20 @@ function renderRunner(){
   const fn=$("#r-finish"); if(fn)fn.onclick=finishWorkout;
   $$(".feel button").forEach(b=>b.onclick=()=>{ e.feel=b.dataset.f; save(); render(); });
   const sw=$("#swap"); if(sw)sw.onclick=()=>openVariantSwap(e.base);
+  const ht=$("#howto"); if(ht)ht.onclick=()=>openHowTo(e.ex);
+}
+function openHowTo(exId){
+  const def=EX[exId]; if(!def)return;
+  $("#sheet-inner").innerHTML=`<div class="eyebrow center">How to · ${def.name}</div>
+    <div class="demo" style="height:120px;margin:10px 0">${exGlyph(def.eq)}</div>
+    <button class="btn btn-ember btn-block" id="ht-watch">${icon('play')} Watch a demo video</button>
+    <div class="card" style="margin-top:12px"><div class="eyebrow">Do this</div><div style="margin-top:4px;font-size:15px">${def.cue}</div></div>
+    <div class="card" style="margin-top:10px"><div class="eyebrow">Avoid</div><div style="margin-top:4px;font-size:15px">${def.miss}</div></div>
+    <div class="dim center" style="font-size:12px;margin-top:10px">Targets ${def.mus}</div>
+    <button class="btn btn-ghost btn-block" id="ht-close" style="margin-top:12px">Close</button>`;
+  $("#sheet").classList.add("show");
+  $("#ht-watch").onclick=()=>{ const q=encodeURIComponent(def.name+" "+(def.eq==="band"?"resistance band":"dumbbell")+" how to proper form"); window.open("https://www.youtube.com/results?search_query="+q,"_blank","noopener"); };
+  $("#ht-close").onclick=()=>$("#sheet").classList.remove("show");
 }
 function openVariantSwap(baseId){
   const opts=(VARIANTS[baseId]||[]).filter(id=>EX[id]);
@@ -1011,6 +1032,7 @@ function renderSettings(){
      <label class="row between">Name <input type="text" id="s-name" value="${S.profile.name}" style="width:60%"></label>
      <label class="row between">Your why <input type="text" id="s-why" value="${S.profile.why||''}" placeholder="optional" style="width:60%"></label>
      <div class="row between">Dumbbell max <div class="opt">${[25,50,75,90].map(w=>`<button data-w="${w}" class="sset ${S.profile.dumbbellMax===w?'sel':''}">${w}</button>`).join("")}</div></div>
+     <div class="row between">Weight jump <div class="opt">${[2.5,5,10].map(n=>`<button data-i="${n}" class="iset ${S.profile.dumbbellIncrement===n?'sel':''}">${n}</button>`).join("")}</div></div>
      <div class="row between">Band levels <div class="opt">${[2,3,4,5].map(n=>`<button data-n="${n}" class="bset ${S.profile.bandCount===n?'sel':''}">${n}</button>`).join("")}</div></div>
      <label class="row between">Rest timer sound <input type="checkbox" id="s-sound" ${S.settings.sound?"checked":""} style="width:24px;height:24px;accent-color:#FF5A1F"></label>
    </div>
@@ -1047,7 +1069,8 @@ function renderSettings(){
   $("#back").onclick=()=>view("home");
   $("#s-name").onchange=e=>{S.profile.name=e.target.value;save();};
   $("#s-why").onchange=e=>{S.profile.why=e.target.value;save();};
-  $$(".sset").forEach(b=>b.onclick=()=>{S.profile.dumbbellMax=+b.dataset.w;save();renderSettings();});
+  $$(".sset").forEach(b=>b.onclick=()=>{S.profile.dumbbellMax=+b.dataset.w; for(const id in S.exState){if(EX[id]&&EX[id].eq==="db"&&S.exState[id].load)S.exState[id].load=snapWeight(S.exState[id].load);} save();renderSettings();});
+  $$(".iset").forEach(b=>b.onclick=()=>{S.profile.dumbbellIncrement=+b.dataset.i; for(const id in S.exState){if(EX[id]&&EX[id].eq==="db"&&S.exState[id].load)S.exState[id].load=snapWeight(S.exState[id].load);} save();renderSettings();});
   $$(".bset").forEach(b=>b.onclick=()=>{S.profile.bandCount=+b.dataset.n;save();renderSettings();});
   $("#s-sound").onchange=e=>{S.settings.sound=e.target.checked;save();};
   $$(".dset").forEach(b=>b.onclick=()=>{const n=+b.dataset.days; S.progress.weeklyGoal=n; S.profile.weeklyGoal=n; save();renderSettings();});
