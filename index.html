@@ -112,6 +112,7 @@ button:focus-visible,input:focus-visible,label:focus-visible,[tabindex]:focus-vi
 .cue{color:var(--ink-1);font-size:17px;margin-top:8px}
 .mistake{color:var(--ink-2);font-size:14px;margin-top:6px}
 .target{font-family:var(--ff-d);font-weight:800;font-variant-numeric:tabular-nums;font-size:15px;color:var(--ink-1);margin-top:12px}
+.ecccue{display:flex;align-items:center;gap:8px;margin-top:10px;padding:9px 13px;border-radius:12px;background:var(--ember-glow);color:var(--ember-bright);font-weight:700;font-size:14px}
 .demo{width:100%;height:120px;border-radius:16px;background:radial-gradient(120% 120% at 50% 0%,var(--bg-3),var(--bg-1));display:flex;align-items:center;justify-content:center;margin-top:14px;color:var(--ink-2);font-size:13px;position:relative;overflow:hidden}
 .demo-cta{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:12px;font-weight:700;color:var(--ember);text-shadow:0 1px 4px rgba(0,0,0,.6)}
 /* Animated exercise figure (offline, drawn from joint coordinates) */
@@ -120,8 +121,8 @@ button:focus-visible,input:focus-visible,label:focus-visible,[tabindex]:focus-vi
 .exfig .hd{fill:var(--ember);stroke:none}
 .exfig .eq{stroke:var(--ink-1);stroke-width:6;stroke-linecap:round;fill:none}
 .exfig .eqd{fill:var(--ink-1);stroke:none}
-.exfig .fa{animation:exFlipA 1.7s steps(1,end) infinite}
-.exfig .fb{opacity:0;animation:exFlipB 1.7s steps(1,end) infinite}
+.exfig .fa{animation:exFlipA 2.4s steps(1,end) infinite}
+.exfig .fb{opacity:0;animation:exFlipB 2.4s steps(1,end) infinite}
 @keyframes exFlipA{0%{opacity:1}50%{opacity:0}}
 @keyframes exFlipB{0%{opacity:0}50%{opacity:1}}
 .demo svg{width:96px;height:96px;opacity:.92}
@@ -198,7 +199,7 @@ input[type=text]{width:100%;background:var(--bg-3);border:0;border-radius:12px;c
 /* ===================================================================================
    FORGE — single-file offline workout PWA.  Layers: Content · Store · Engine · Game · Timer · UI
    =================================================================================== */
-const VERSION = "0.8.0";
+const VERSION = "0.9.0";
 const $ = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -330,7 +331,7 @@ function freshState(){return{
     lastWorkoutMs:0,
     lifetime:{workouts:0,volumeLb:0,prs:0,perfectWeeks:0,comebacks:0}
   },
-  settings:{restDefault:90,sound:true,seasonFocus:"auto",lastBackupWorkouts:0,lastBackupAt:0,nudgeSnooze:0},
+  settings:{restDefault:90,sound:true,seasonFocus:"auto",eccentric:true,lastBackupWorkouts:0,lastBackupAt:0,nudgeSnooze:0},
   activeSession:null
 };}
 const APPKEY="forge.app.v1";   // multi-profile container
@@ -892,6 +893,7 @@ function renderRunner(){
      <div class="mistake">Avoid: ${e.miss}</div>
      <button class="demo" id="howto" aria-label="How to do ${e.name}">${illustration(e.ex)}<span class="demo-cta">How to do it ›</span></button>
      <div class="target">Target ${e.sets.length} × ${e.rr[0]}–${e.rr[1]} reps${lastPerf?` · last: ${lastPerf}`:""}</div>
+     ${S.settings.eccentric?`<div class="ecccue">${icon('clock')} Lower slow &amp; controlled — 3–4s down on every rep</div>`:''}
      ${e.tech?`<div class="card" style="border-left:3px solid var(--ember);margin-top:12px;padding:12px 14px"><b>${e.tech.tag}</b> <span class="muted">${e.tech.tip}</span></div>`:''}
      ${baseStall?`<button class="btn btn-ghost btn-block" id="swap" style="margin-top:10px;min-height:44px">This lift's been stuck — try a variation</button>`:''}
    </div>
@@ -931,6 +933,7 @@ function openHowTo(exId){
     <button class="btn btn-ember btn-block" id="ht-watch">${icon('play')} Watch a demo video</button>
     <div class="card" style="margin-top:12px"><div class="eyebrow">Do this</div><div style="margin-top:4px;font-size:15px">${def.cue}</div></div>
     <div class="card" style="margin-top:10px"><div class="eyebrow">Avoid</div><div style="margin-top:4px;font-size:15px">${def.miss}</div></div>
+    ${S.settings.eccentric?`<div class="card" style="margin-top:10px;border-left:3px solid var(--ember)"><div class="eyebrow">Tempo · build the most muscle</div><div style="margin-top:4px;font-size:15px">Lower for 3–4 seconds on every rep, then drive up. Slow, controlled lowering keeps the muscle under tension the longest — the strongest driver of growth.</div></div>`:''}
     <div class="dim center" style="font-size:12px;margin-top:10px">Targets ${def.mus}</div>
     <button class="btn btn-ghost btn-block" id="ht-close" style="margin-top:12px">Close</button>`;
   $("#sheet").classList.add("show");
@@ -1116,6 +1119,7 @@ function renderSettings(){
    <div class="card stack">
      <div class="eyebrow">Program</div>
      <div class="row between">Training days <div class="opt">${[3,4,5].map(n=>`<button data-days="${n}" class="dset ${S.progress.weeklyGoal===n?'sel':''}">${n}</button>`).join("")}</div></div>
+     <label class="row between">Eccentric emphasis (slow 3–4s lowering) <input type="checkbox" id="s-ecc" ${S.settings.eccentric?"checked":""} style="width:24px;height:24px;accent-color:var(--ember)"></label>
      <div class="row between" style="align-items:flex-start"><span>Season focus</span><div class="opt" style="justify-content:flex-end;max-width:64%">${[["auto","Auto"],["strength","Strength"],["pump","Pump"],["tempo","Tempo"]].map(([k,l])=>`<button data-focus="${k}" class="fset ${(S.settings.seasonFocus||'auto')===k?'sel':''}">${l}</button>`).join("")}</div></div>
      <p class="dim" style="font-size:12px">Auto rotates Foundation → Strength → Pump → Tempo every ~6 weeks. Pick one to lock it. Adding days unlocks Day D / E.</p>
    </div>
@@ -1151,6 +1155,7 @@ function renderSettings(){
   $$(".bset").forEach(b=>b.onclick=()=>{S.profile.bandCount=+b.dataset.n;save();renderSettings();});
   $("#s-sound").onchange=e=>{S.settings.sound=e.target.checked;save();};
   $$(".dset").forEach(b=>b.onclick=()=>{const n=+b.dataset.days; S.progress.weeklyGoal=n; S.profile.weeklyGoal=n; save();renderSettings();});
+  { const ec=$("#s-ecc"); if(ec)ec.onchange=e=>{S.settings.eccentric=e.target.checked;save();}; }
   $$(".fset").forEach(b=>b.onclick=()=>{S.settings.seasonFocus=b.dataset.focus; save();renderSettings();});
   $$(".tset").forEach(b=>b.onclick=()=>{S.profile.theme=b.dataset.theme; applyTheme(S.profile.theme); save(); renderSettings();});
   $$(".psw").forEach(b=>b.onclick=()=>switchProfile(b.dataset.pid));
