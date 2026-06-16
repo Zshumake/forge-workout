@@ -113,6 +113,10 @@ button:focus-visible,input:focus-visible,label:focus-visible,[tabindex]:focus-vi
 .mistake{color:var(--ink-2);font-size:14px;margin-top:6px}
 .target{font-family:var(--ff-d);font-weight:800;font-variant-numeric:tabular-nums;font-size:15px;color:var(--ink-1);margin-top:12px}
 .ecccue{display:flex;align-items:center;gap:8px;margin-top:10px;padding:9px 13px;border-radius:12px;background:var(--ember-glow);color:var(--ember-bright);font-weight:700;font-size:14px}
+.wu-item{padding:8px 0;border-bottom:1px solid var(--line)}
+.wu-item:last-child{border-bottom:0}
+.watchlink{margin:6px 0 0 36px;background:none;border:0;color:var(--ember);font-weight:700;font-size:13px;padding:4px 0;cursor:pointer}
+.watchlink:active{opacity:.6}
 .demo{width:100%;height:120px;border-radius:16px;background:radial-gradient(120% 120% at 50% 0%,var(--bg-3),var(--bg-1));display:flex;align-items:center;justify-content:center;margin-top:14px;color:var(--ink-2);font-size:13px;position:relative;overflow:hidden}
 .demo-cta{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:12px;font-weight:700;color:var(--ember);text-shadow:0 1px 4px rgba(0,0,0,.6)}
 /* Animated exercise figure (offline, drawn from joint coordinates) */
@@ -199,7 +203,7 @@ input[type=text]{width:100%;background:var(--bg-3);border:0;border-radius:12px;c
 /* ===================================================================================
    FORGE — single-file offline workout PWA.  Layers: Content · Store · Engine · Game · Timer · UI
    =================================================================================== */
-const VERSION = "0.9.0";
+const VERSION = "0.9.1";
 const $ = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -304,8 +308,18 @@ const ROUTINES = [
     {ex:"band_pallof",sets:2,rr:[10,12],rest:45,g:"F",fin:true},
   ]},
 ];
-const WARMUP = ["Arm circles + band pull-aparts × 15","Bodyweight squats × 10 (deep, slow)","Hip hinges / leg swings × 10 each","World's-greatest-stretch × 4 / side"];
-const COOLDOWN = ["Doorway chest stretch · 30s/side","Standing forward fold · 30s","Figure-4 glute stretch · 30s/side","3 slow breaths to wind down"];
+const WARMUP = [
+  {name:"Arm circles + band pull-aparts", reps:"15 each", q:"band pull aparts arm circles warm up", how:"Big slow circles with both arms — forward, then back. Then hold a band at shoulder width out in front and pull it apart toward your chest, squeezing your shoulder blades together."},
+  {name:"Bodyweight squats", reps:"10 reps", q:"bodyweight squat how to proper form", how:"Feet about shoulder-width. Sit your hips back like reaching for a chair, go as low as is comfortable, then stand tall. Slow and smooth, no weight."},
+  {name:"Standing leg swings", reps:"10 / leg", q:"standing leg swings hip warm up", how:"Hold a wall or doorframe for balance and swing one leg forward and back like a pendulum, then switch sides. Loosens up the hips."},
+  {name:"Deep lunge with a reach-up twist", reps:"4 / side", q:"world's greatest stretch how to", how:"Step one foot far forward into a deep lunge and put both hands on the floor inside that foot. Then rotate your torso and reach the inside arm up toward the ceiling. Switch sides. (Some people call this the “world’s greatest stretch.”)"}
+];
+const COOLDOWN = [
+  {name:"Doorway chest stretch", reps:"30s / side", q:"doorway chest stretch how to", how:"Rest a forearm on a doorframe with your elbow about shoulder height, then gently step forward until you feel a stretch across the front of your chest."},
+  {name:"Standing forward fold", reps:"30s", q:"standing forward fold hamstring stretch", how:"Feet hip-width, knees soft. Hinge at the hips and let your head and arms hang down toward the floor. Let your neck go completely loose."},
+  {name:"Lying figure-4 glute stretch", reps:"30s / side", q:"figure 4 glute stretch lying down", how:"Lie on your back. Cross one ankle over the opposite knee so your legs make a number 4, then reach up and pull the bottom thigh toward your chest."},
+  {name:"Slow breaths to wind down", reps:"3 breaths", q:"slow breathing to relax cool down", how:"In through your nose for a count of 4, out slowly through your mouth for a count of 6. Three rounds — lets your heart rate settle back down."}
+];
 const RIR_NOTE = {1:"Leave ~3 reps in reserve",2:"Leave ~2 in reserve",3:"Leave ~2 in reserve",4:"Leave ~1 in reserve — push it",5:"Deload week — go lighter, keep it easy"};
 const BELTS=[[1,"Novice"],[5,"Bronze"],[10,"Silver"],[15,"Gold"],[20,"Iron"],[30,"Steel"],[45,"Titanium"]];
 
@@ -1009,12 +1023,24 @@ function renderWarmup(){
    <div class="card stack">
      <div><div class="eyebrow">${ses.label} · ~4 min</div><h2 style="font-size:24px;margin-top:4px">Warm up</h2>
      <div class="muted">Quick and dynamic — then straight into it.</div></div>
-     ${WARMUP.map((w,i)=>`<label class="row" style="gap:12px"><input type="checkbox" class="wu" style="width:24px;height:24px;accent-color:#FF5A1F"> <span>${w}</span></label>`).join("")}
+     ${WARMUP.map((w,i)=>`<div class="wu-item">
+       <label class="row" style="gap:12px;align-items:flex-start">
+         <input type="checkbox" class="wu" style="width:24px;height:24px;accent-color:var(--ember);flex:none;margin-top:1px">
+         <span style="flex:1;min-width:0"><span style="font-weight:700">${w.name}</span> <span class="dim" style="font-size:13px">· ${w.reps}</span><div class="muted" style="font-size:13px;margin-top:3px;line-height:1.45">${w.how}</div></span>
+       </label>
+       <button class="watchlink" data-ytq="${encodeURIComponent(w.q)}">Watch demo ›</button>
+     </div>`).join("")}
    </div>
    <div style="height:12px"></div>
    <button class="btn btn-ember btn-hero" id="wu-go">Begin first exercise →</button>`;
   $("#r-quit").onclick=()=>{ S.activeSession=null; releaseWake(); save(); view("home"); };
   $("#wu-go").onclick=()=>{ ses.idx=0; save(); render(); };
+  wireWatch();
+}
+function wireWatch(){
+  root().querySelectorAll(".watchlink").forEach(b=>{
+    b.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); window.open("https://www.youtube.com/results?search_query="+b.dataset.ytq,"_blank","noopener"); };
+  });
 }
 function lastPerformedText(exId){
   for(let i=S.sessions.length-1;i>=0;i--){const e=S.sessions[i].entries.find(x=>x.ex===exId);if(e){const def=EX[exId];const ds=e.sets.filter(s=>s.done);if(!ds.length)continue;const s=ds[ds.length-1];return def.eq==="db"?`${s.weight}lb × ${s.reps}`:`${bandLevels()[s.bandIdx]?.label||""} × ${s.reps}`;}}return "";
@@ -1061,10 +1087,11 @@ function renderRecap(){
    <div class="center muted" style="margin-bottom:18px">${r.sess.label} · ${Math.round((r.sess.endedAt-r.sess.startedAt)/60000)} min</div>
    <div class="card row between" style="margin-bottom:14px"><div class="ring-wrap">${ringSVG(p.week.segments,p.weeklyGoal)}<div><div class="display" style="font-size:20px">${p.streak.current} wk streak</div><div class="dim" style="font-size:13px">Level ${p.level} · ${p.belt}</div></div></div></div>
    ${evHTML||`<div class="event" style="border-left:3px solid var(--done)"><span style="color:var(--done);display:flex">${icon('seal',{size:20})}</span><div>You showed up. That's the whole game.</div></div>`}
-   <div class="card stack" style="margin-top:6px"><div class="eyebrow">Cool down · 2 min</div>${COOLDOWN.map(c=>`<div class="muted">• ${c}</div>`).join("")}</div>
+   <div class="card stack" style="margin-top:6px"><div class="eyebrow">Cool down · 2 min</div>${COOLDOWN.map(c=>`<div class="wu-item" style="padding-top:2px"><div><span style="font-weight:700">${c.name}</span> <span class="dim" style="font-size:13px">· ${c.reps}</span></div><div class="muted" style="font-size:13px;margin-top:2px;line-height:1.45">${c.how}</div><button class="watchlink" data-ytq="${encodeURIComponent(c.q)}">Watch demo ›</button></div>`).join("")}</div>
    <div style="height:12px"></div>
    <button class="btn btn-ember btn-hero" id="rc-done">Done</button>`;
   $("#rc-done").onclick=()=>view("home");
+  wireWatch();
 }
 
 /* ---- History ---- */
