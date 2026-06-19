@@ -117,6 +117,8 @@ button:focus-visible,input:focus-visible,label:focus-visible,[tabindex]:focus-vi
 .wu-item:last-child{border-bottom:0}
 .watchlink{margin:6px 0 0 36px;background:none;border:0;color:var(--ember);font-weight:700;font-size:13px;padding:4px 0;cursor:pointer}
 .watchlink:active{opacity:.6}
+.itb-head{margin:14px 0 2px;font-size:11px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ember)}
+.wu-item.itb{border-left:3px solid var(--ember);padding-left:11px}
 .demo{width:100%;height:120px;border-radius:16px;background:radial-gradient(120% 120% at 50% 0%,var(--bg-3),var(--bg-1));display:flex;align-items:center;justify-content:center;margin-top:14px;color:var(--ink-2);font-size:13px;position:relative;overflow:hidden}
 .demo-cta{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:12px;font-weight:700;color:var(--ember);text-shadow:0 1px 4px rgba(0,0,0,.6)}
 /* Animated exercise figure (offline, drawn from joint coordinates) */
@@ -203,7 +205,7 @@ input[type=text]{width:100%;background:var(--bg-3);border:0;border-radius:12px;c
 /* ===================================================================================
    FORGE — single-file offline workout PWA.  Layers: Content · Store · Engine · Game · Timer · UI
    =================================================================================== */
-const VERSION = "0.9.1";
+const VERSION = "0.9.2";
 const $ = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -320,6 +322,11 @@ const COOLDOWN = [
   {name:"Lying figure-4 glute stretch", reps:"30s / side", q:"figure 4 glute stretch lying down", how:"Lie on your back. Cross one ankle over the opposite knee so your legs make a number 4, then reach up and pull the bottom thigh toward your chest."},
   {name:"Slow breaths to wind down", reps:"3 breaths", q:"slow breathing to relax cool down", how:"In through your nose for a count of 4, out slowly through your mouth for a count of 6. Three rounds — lets your heart rate settle back down."}
 ];
+// Eccentric IT-band prehab — appended to the warm-up for profiles with settings.itbWarmup (default on for "Zach").
+const ITB_WARMUP = [
+  {name:"Side-lying band hip abduction", reps:"10 / side · 3–4s lower", q:"side lying hip abduction band eccentric", how:"Lie on your side with a band looped around both legs just above the knees. Raise the top leg up against the band, then lower it back down slowly over 3–4 seconds — that slow, controlled lowering is what loads the IT band, so fight it the whole way down. Switch sides."},
+  {name:"Single-leg step-down", reps:"8 / side · 3–4s lower", q:"eccentric single leg step down IT band syndrome", how:"Stand on one leg on a step or stair. Slowly lower the other heel toward the floor over 3–4 seconds, keeping your standing knee tracking over your toes (don't let it cave inward), then press back up. The slow lowering loads the lateral hip. Switch sides."}
+];
 const RIR_NOTE = {1:"Leave ~3 reps in reserve",2:"Leave ~2 in reserve",3:"Leave ~2 in reserve",4:"Leave ~1 in reserve — push it",5:"Deload week — go lighter, keep it easy"};
 const BELTS=[[1,"Novice"],[5,"Bronze"],[10,"Silver"],[15,"Gold"],[20,"Iron"],[30,"Steel"],[45,"Titanium"]];
 
@@ -350,7 +357,7 @@ function freshState(){return{
 };}
 const APPKEY="forge.app.v1";   // multi-profile container
 function newId(){return "p"+Date.now().toString(36)+Math.floor(Math.random()*1e4);}
-function normalize(st){ st=Object.assign(freshState(),st||{}); if(!st.profile)st.profile=freshState().profile; if(!st.profile.theme)st.profile.theme="aurora"; return st; }
+function normalize(st){ st=Object.assign(freshState(),st||{}); if(!st.profile)st.profile=freshState().profile; if(!st.profile.theme)st.profile.theme="aurora"; if(!st.settings)st.settings=freshState().settings; if(st.settings.itbWarmup===undefined)st.settings.itbWarmup=(st.profile.name||"").trim().toLowerCase()==="zach"; return st; }
 function loadApp(){
   try{const r=localStorage.getItem(APPKEY); if(r){const a=JSON.parse(r); if(a&&a.profiles&&a.order&&a.active&&a.profiles[a.active]){ a.order.forEach(id=>a.profiles[id]=normalize(a.profiles[id])); return a; }}}catch(e){}
   try{const old=localStorage.getItem(KEY); if(old){const st=normalize(JSON.parse(old)); const id=newId(); return {v:1,active:id,order:[id],profiles:{[id]:st}}; }}catch(e){}   // migrate legacy single profile
@@ -1023,13 +1030,8 @@ function renderWarmup(){
    <div class="card stack">
      <div><div class="eyebrow">${ses.label} · ~4 min</div><h2 style="font-size:24px;margin-top:4px">Warm up</h2>
      <div class="muted">Quick and dynamic — then straight into it.</div></div>
-     ${WARMUP.map((w,i)=>`<div class="wu-item">
-       <label class="row" style="gap:12px;align-items:flex-start">
-         <input type="checkbox" class="wu" style="width:24px;height:24px;accent-color:var(--ember);flex:none;margin-top:1px">
-         <span style="flex:1;min-width:0"><span style="font-weight:700">${w.name}</span> <span class="dim" style="font-size:13px">· ${w.reps}</span><div class="muted" style="font-size:13px;margin-top:3px;line-height:1.45">${w.how}</div></span>
-       </label>
-       <button class="watchlink" data-ytq="${encodeURIComponent(w.q)}">Watch demo ›</button>
-     </div>`).join("")}
+     ${WARMUP.map(w=>wuItem(w)).join("")}
+     ${S.settings.itbWarmup?`<div class="itb-head">For your IT band · do these every session</div>${ITB_WARMUP.map(w=>wuItem(w,"itb")).join("")}`:""}
    </div>
    <div style="height:12px"></div>
    <button class="btn btn-ember btn-hero" id="wu-go">Begin first exercise →</button>`;
@@ -1037,6 +1039,13 @@ function renderWarmup(){
   $("#wu-go").onclick=()=>{ ses.idx=0; save(); render(); };
   wireWatch();
 }
+function wuItem(w,cls){return `<div class="wu-item ${cls||""}">
+       <label class="row" style="gap:12px;align-items:flex-start">
+         <input type="checkbox" class="wu" style="width:24px;height:24px;accent-color:var(--ember);flex:none;margin-top:1px">
+         <span style="flex:1;min-width:0"><span style="font-weight:700">${w.name}</span> <span class="dim" style="font-size:13px">· ${w.reps}</span><div class="muted" style="font-size:13px;margin-top:3px;line-height:1.45">${w.how}</div></span>
+       </label>
+       <button class="watchlink" data-ytq="${encodeURIComponent(w.q)}">Watch demo ›</button>
+     </div>`;}
 function wireWatch(){
   root().querySelectorAll(".watchlink").forEach(b=>{
     b.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); window.open("https://www.youtube.com/results?search_query="+b.dataset.ytq,"_blank","noopener"); };
@@ -1147,6 +1156,7 @@ function renderSettings(){
      <div class="eyebrow">Program</div>
      <div class="row between">Training days <div class="opt">${[3,4,5].map(n=>`<button data-days="${n}" class="dset ${S.progress.weeklyGoal===n?'sel':''}">${n}</button>`).join("")}</div></div>
      <label class="row between">Eccentric emphasis (slow 3–4s lowering) <input type="checkbox" id="s-ecc" ${S.settings.eccentric?"checked":""} style="width:24px;height:24px;accent-color:var(--ember)"></label>
+     <label class="row between" style="align-items:flex-start"><span style="flex:1">IT-band eccentrics in warm-up<div class="dim" style="font-size:12px;margin-top:2px">Adds side-lying band abduction + single-leg step-downs (slow lowering) to every warm-up.</div></span> <input type="checkbox" id="s-itb" ${S.settings.itbWarmup?"checked":""} style="width:24px;height:24px;accent-color:var(--ember);flex:none;margin-top:1px"></label>
      <div class="row between" style="align-items:flex-start"><span>Season focus</span><div class="opt" style="justify-content:flex-end;max-width:64%">${[["auto","Auto"],["strength","Strength"],["pump","Pump"],["tempo","Tempo"]].map(([k,l])=>`<button data-focus="${k}" class="fset ${(S.settings.seasonFocus||'auto')===k?'sel':''}">${l}</button>`).join("")}</div></div>
      <p class="dim" style="font-size:12px">Auto rotates Foundation → Strength → Pump → Tempo every ~6 weeks. Pick one to lock it. Adding days unlocks Day D / E.</p>
    </div>
@@ -1183,6 +1193,7 @@ function renderSettings(){
   $("#s-sound").onchange=e=>{S.settings.sound=e.target.checked;save();};
   $$(".dset").forEach(b=>b.onclick=()=>{const n=+b.dataset.days; S.progress.weeklyGoal=n; S.profile.weeklyGoal=n; save();renderSettings();});
   { const ec=$("#s-ecc"); if(ec)ec.onchange=e=>{S.settings.eccentric=e.target.checked;save();}; }
+  { const it=$("#s-itb"); if(it)it.onchange=e=>{S.settings.itbWarmup=e.target.checked;save();}; }
   $$(".fset").forEach(b=>b.onclick=()=>{S.settings.seasonFocus=b.dataset.focus; save();renderSettings();});
   $$(".tset").forEach(b=>b.onclick=()=>{S.profile.theme=b.dataset.theme; applyTheme(S.profile.theme); save(); renderSettings();});
   $$(".psw").forEach(b=>b.onclick=()=>switchProfile(b.dataset.pid));
