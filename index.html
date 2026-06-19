@@ -205,7 +205,7 @@ input[type=text]{width:100%;background:var(--bg-3);border:0;border-radius:12px;c
 /* ===================================================================================
    FORGE — single-file offline workout PWA.  Layers: Content · Store · Engine · Game · Timer · UI
    =================================================================================== */
-const VERSION = "0.9.2";
+const VERSION = "0.9.3";
 const $ = (s,r=document)=>r.querySelector(s);
 const $$ = (s,r=document)=>[...r.querySelectorAll(s)];
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -566,20 +566,25 @@ function beep(){if(!S.settings.sound||!T.ctx)return;try{const t=T.ctx.currentTim
 async function acquireWake(){try{if("wakeLock"in navigator&&!T.wake)T.wake=await navigator.wakeLock.request("screen");}catch(e){}}
 function releaseWake(){ if(T.wake){try{T.wake.release();}catch(e){}T.wake=null;} }
 function startRest(sec){ if(sec<=0)return; T.endsAt=Date.now()+sec*1000; T.dur=sec; T.armed=true; acquireWake(); showSheet(true); loop(); }
-function adjustRest(d){ if(!T.endsAt)return; T.endsAt=Math.max(Date.now(),T.endsAt+d*1000); T.dur=Math.max(1,T.dur+d); renderSheet(); }
+function adjustRest(d){ if(!T.endsAt)return; T.endsAt=Math.max(Date.now(),T.endsAt+d*1000); T.dur=Math.max(1,T.dur+d); tickSheet(); }
 function skipRest(){ endRest(); }
 function endRest(){ T.endsAt=0;T.armed=false;cancelAnimationFrame(T.raf);showSheet(false); if(!S.activeSession) releaseWake(); } // keep screen awake while still mid-workout
-function loop(){ const rem=T.endsAt-Date.now(); renderSheet(); if(rem<=0){ if(T.armed){beep();flash();announce("Rest over — next set");T.armed=false;} endRest(); return;} T.raf=requestAnimationFrame(loop); }
+function loop(){ const rem=T.endsAt-Date.now(); tickSheet(); if(rem<=0){ if(T.armed){beep();flash();announce("Rest over — next set");T.armed=false;} endRest(); return;} T.raf=requestAnimationFrame(loop); }
 function flash(){const f=$("#flash");f.classList.add("go");setTimeout(()=>f.classList.remove("go"),150);}
 function announce(m){const l=$("#live");if(l)l.textContent=m;}
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState!=="visible")return; if(S.profile&&S.profile.theme==="aurora")applyAurora(); if(T.ctx&&T.ctx.state!=="running")T.ctx.resume(); if(S.activeSession&&!T.wake)acquireWake(); if(T.endsAt){ const rem=T.endsAt-Date.now(); if(rem<=0){if(T.armed){beep();flash();T.armed=false;}endRest();}else loop(); }});
 function showSheet(on){const s=$("#sheet");if(on){renderSheet();s.classList.add("show");}else s.classList.remove("show");}
-function renderSheet(){ const rem=Math.max(0,T.endsAt-Date.now()); const sec=Math.ceil(rem/1000); const mm=Math.floor(sec/60),ss=sec%60; const pct=T.dur?clamp(rem/(T.dur*1000),0,1):0;
+function renderSheet(){ // build the skeleton + attach handlers ONCE per open; the loop only calls tickSheet so the buttons aren't destroyed mid-tap
   $("#sheet-inner").innerHTML=`<div class="eyebrow center">Rest</div>
-   <div class="resttime">${mm}:${String(ss).padStart(2,"0")}</div>
-   <div class="restbar"><i style="width:${pct*100}%"></i></div>
+   <div class="resttime" id="rest-time">0:00</div>
+   <div class="restbar"><i id="rest-bar" style="width:100%"></i></div>
    <div class="restctrls"><button class="btn" id="rest-sub">−15s</button><button class="btn btn-ghost" id="rest-skip">Skip</button><button class="btn" id="rest-add">+15s</button></div>`;
   $("#rest-sub").onclick=()=>adjustRest(-15); $("#rest-add").onclick=()=>adjustRest(15); $("#rest-skip").onclick=skipRest;
+  tickSheet();
+}
+function tickSheet(){ const rem=Math.max(0,T.endsAt-Date.now()); const sec=Math.ceil(rem/1000); const mm=Math.floor(sec/60),ss=sec%60; const pct=T.dur?clamp(rem/(T.dur*1000),0,1):0;
+  const t=$("#rest-time"); if(t)t.textContent=`${mm}:${String(ss).padStart(2,"0")}`;
+  const b=$("#rest-bar"); if(b)b.style.width=`${pct*100}%`;
 }
 
 /* -------------------------------------- COMPANION ART -------------------------------------- */
